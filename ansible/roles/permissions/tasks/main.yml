@@ -1,0 +1,115 @@
+---
+# =============================================================================
+# TASKS — Role: permissions
+# Configura permissões sudo e restrições de acesso por grupo
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# ETAPA 1: Configurar sudo para administradores
+# Permite que qualquer membro do grupo 'administradores' execute
+# qualquer comando como root, sem necessidade de senha
+# ---------------------------------------------------------------------------
+- name: Configurar sudoers para grupo administradores
+  copy:
+    dest: /etc/sudoers.d/administradores
+    content: |
+      # Membros do grupo administradores têm acesso sudo completo
+      %administradores ALL=(ALL:ALL) NOPASSWD: ALL
+    mode: '0440'
+    validate: /usr/sbin/visudo -cf %s
+
+# ---------------------------------------------------------------------------
+# ETAPA 2: Configurar sudo para operadores (acesso restrito)
+# Operadores só podem executar scripts específicos em /operacao/scripts/
+# Isso implementa o princípio do menor privilégio
+# ---------------------------------------------------------------------------
+- name: Criar diretório de scripts para operadores
+  file:
+    path: /operacao/scripts
+    state: directory
+    owner: root
+    group: operadores
+    mode: '0750'
+
+- name: Criar script de exemplo para operadores
+  copy:
+    dest: /operacao/scripts/status.sh
+    content: |
+      #!/bin/bash
+      # Script de status do sistema — executável por operadores
+      echo "=== Status do Sistema ==="
+      echo "Hostname: $(hostname)"
+      echo "Uptime: $(uptime)"
+      echo "Disco: $(df -h / | tail -1)"
+      echo "Memória: $(free -h | grep Mem)"
+    mode: '0750'
+    owner: root
+    group: operadores
+
+- name: Configurar sudoers para grupo operadores (scripts específicos)
+  copy:
+    dest: /etc/sudoers.d/operadores
+    content: |
+      # Operadores podem executar APENAS scripts no diretório /operacao/scripts/
+      # Não têm acesso sudo geral
+      %operadores ALL=(root) NOPASSWD: /operacao/scripts/*.sh
+    mode: '0440'
+    validate: /usr/sbin/visudo -cf %s
+
+# ---------------------------------------------------------------------------
+# ETAPA 3: Restringir convidados
+# Convidados NÃO recebem nenhuma entrada em sudoers
+# Usam /bin/rbash (shell restrito) — configurado na role users
+# ---------------------------------------------------------------------------
+- name: Garantir que convidados NÃO têm arquivo sudoers
+  file:
+    path: /etc/sudoers.d/convidados
+    state: absent
+
+# ---------------------------------------------------------------------------
+# ETAPA 4: Configurar permissões por container (papel na infra)
+# O adminsrv recebe configuração extra de auditoria de login
+# ---------------------------------------------------------------------------
+- name: Habilitar log de autenticação SSH (todos os servidores)
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?LogLevel"
+    line: "LogLevel VERBOSE"
+    state: present
+
+# ---------------------------------------------------------------------------
+# ETAPA 5: Configurar restrição de acesso ao datastore por grupo
+# adminsrv conecta ao datastore como 'leitura' → grupo operadores
+# worksrv conecta ao datastore como 'escrita'  → grupo administradores
+# Essa regra é aplicada no datastore para controlar quem escreve
+# ---------------------------------------------------------------------------
+- name: Criar usuário de leitura no datastore (Service A → Read)
+  user:
+    name: ds_reader
+    uid: 3001
+    group: operadores
+    shell: /bin/bash
+    comment: "Conta de leitura — Service A (adminsrv)"
+    create_home: true
+    state: present
+  when: inventory_hostname == 'datastore'
+
+- name: Criar usuário de escrita no datastore (Service B → Read/Write)
+  user:
+    name: ds_writer
+    uid: 3002
+    group: administradores
+    shell: /bin/bash
+    comment: "Conta de escrita — Service B (worksrv)"
+    create_home: true
+    state: present
+  when: inventory_hostname == 'datastore'
+
+- name: Definir senhas dos usuários do datastore
+  user:
+    name: "{{ item.name }}"
+    password: "{{ item.password | password_hash('sha512') }}"
+  loop:
+    - { name: ds_reader, password: "Reader@2024!" }
+    - { name: ds_writer, password: "Writer@2024!" }
+  when: inventory_hostname == 'datastore'

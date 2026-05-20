@@ -1,0 +1,57 @@
+---
+# =============================================================================
+# VARIÁVEIS — Role: users
+# Define grupos e usuários da infraestrutura corporativa
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Grupos do sistema
+# Cada grupo representa um nível de acesso diferente
+# ---------------------------------------------------------------------------
+grupos:
+  - name: administradores
+    gid: 1100
+    comment: "Grupo com controle total do sistema"
+
+  - name: operadores
+    gid: 1200
+    comment: "Grupo com acesso operacional limitado"
+
+  - name: convidados
+    gid: 1300
+    comment: "Grupo com acesso somente leitura"
+
+# ---------------------------------------------------------------------------
+# Usuários do sistema
+# Cada usuário pertence a um grupo principal e recebe shell correspondente
+# ---------------------------------------------------------------------------
+usuarios:
+  # Administrador: acesso sudo, shell bash completo
+  - name: alice
+    uid: 2001
+    group: administradores
+    groups: [administradores]
+    password: "Alice@2024!"
+    shell: /bin/bash
+    comment: "Administradora do Sistema"
+    create_home: true
+
+  # Operador: sem sudo, shell restrito, acesso a scripts específicos
+  - name: bob
+    uid: 2002
+    group: operadores
+    groups: [operadores]
+    password: "Bob@2024!"
+    shell: /bin/bash
+    comment: "Operador de Sistema"
+    create_home: true
+
+  # Convidado: somente leitura, shell mínimo
+  - name: carol
+    uid: 2003
+    group: convidados
+    groups: [convidados]
+    password: "Carol@2024!"
+    shell: /bin/rbash
+    comment: "Usuario Convidado"
+    create_home: true

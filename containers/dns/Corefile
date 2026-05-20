@@ -1,0 +1,26 @@
+# CoreDNS - Arquivo de Configuração Principal
+# Zona: lab. (domínio interno da empresa)
+lab. {
+    # Plugin hosts: resolve nomes usando arquivo estático (como /etc/hosts)
+    # Mais simples que BIND9 — ideal para ambientes de laboratório
+    hosts /etc/coredns/hosts {
+        # fallthrough: se o nome não for encontrado aqui,
+        # passa para o próximo plugin (forward)
+        fallthrough
+    }
+
+    # Plugin log: registra todas as consultas DNS no stdout
+    log
+
+    # Plugin errors: exibe erros no stdout
+    errors
+}
+
+# Zona catch-all: qualquer consulta fora de .lab
+# é encaminhada para o DNS público do Google (8.8.8.8)
+. {
+    forward . 8.8.8.8 8.8.4.4
+    log
+    errors
+    cache 30
+}

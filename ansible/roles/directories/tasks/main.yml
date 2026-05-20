@@ -1,0 +1,104 @@
+---
+- name: Atualizar cache apt
+  apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Instalar pacote acl (necessário para setfacl)
+  apt:
+    name: acl
+    state: present
+
+- name: Criar diretório /admin
+  file:
+    path: /admin
+    state: directory
+    owner: root
+    group: administradores
+    mode: '0770'
+
+- name: Criar arquivo de exemplo em /admin
+  copy:
+    dest: /admin/README.txt
+    content: |
+      DIRETÓRIO ADMINISTRATIVO
+      Acesso restrito ao grupo: administradores
+      Permissões: rwxrwx--- (0770)
+    owner: root
+    group: administradores
+    mode: '0640'
+
+- name: Criar diretório /operacao
+  file:
+    path: /operacao
+    state: directory
+    owner: root
+    group: administradores
+    mode: '0750'
+
+- name: Criar diretório /operacao/scripts
+  file:
+    path: /operacao/scripts
+    state: directory
+    owner: root
+    group: operadores
+    mode: '0750'
+
+- name: Aplicar ACL — operadores têm leitura em /operacao
+  acl:
+    path: /operacao
+    entity: operadores
+    etype: group
+    permissions: rx
+    state: present
+
+- name: Criar diretório /publico
+  file:
+    path: /publico
+    state: directory
+    owner: root
+    group: root
+    mode: '1777'
+
+- name: Criar arquivo de boas-vindas em /publico
+  copy:
+    dest: /publico/boas_vindas.txt
+    content: |
+      BEM-VINDO À INFRAESTRUTURA CORPORATIVA
+      /admin    → apenas administradores
+      /operacao → administradores e operadores
+      /publico  → todos os usuários
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Criar estrutura do datastore
+  file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: /datastore,           group: administradores, mode: '0755' }
+    - { path: /datastore/readonly,  group: operadores,      mode: '0750' }
+    - { path: /datastore/readwrite, group: administradores, mode: '0770' }
+  when: inventory_hostname == 'datastore'
+
+- name: ACL — ds_reader pode ler /datastore/readonly
+  acl:
+    path: /datastore/readonly
+    entity: ds_reader
+    etype: user
+    permissions: rx
+    state: present
+  when: inventory_hostname == 'datastore'
+
+- name: ACL — ds_writer pode escrever em /datastore/readwrite
+  acl:
+    path: /datastore/readwrite
+    entity: ds_writer
+    etype: user
+    permissions: rwx
+    state: present
+  when: inventory_hostname == 'datastore'

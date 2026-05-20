@@ -1,0 +1,13 @@
+# Arquivo de resolução de nomes internos - domínio .lab
+# Mapeamento: hostname → endereço IP fixo
+#
+# Rede Administrativa (admin_net): 192.168.10.0/24
+192.168.10.2   dns.lab
+192.168.10.10  adminsrv.lab
+192.168.10.100 client.lab
+
+# Rede Operacional (work_net): 192.168.20.0/24
+192.168.20.10  worksrv.lab
+
+# Rede de Dados (data_net): 192.168.30.0/24
+192.168.30.30  datastore.lab

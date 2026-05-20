@@ -1,0 +1,74 @@
+---
+# =============================================================================
+# TASKS — Role: users
+# Cria grupos e usuários com as configurações corretas
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# ETAPA 1: Garantir que o rbash (restricted bash) existe
+# O rbash é um shell com funcionalidades limitadas, ideal para convidados
+# ---------------------------------------------------------------------------
+- name: Verificar se rbash está disponível
+  stat:
+    path: /bin/rbash
+  register: rbash_stat
+
+- name: Criar link simbólico para rbash se não existir
+  file:
+    src: /bin/bash
+    dest: /bin/rbash
+    state: link
+  when: not rbash_stat.stat.exists
+
+# ---------------------------------------------------------------------------
+# ETAPA 2: Criar os grupos do sistema
+# ---------------------------------------------------------------------------
+- name: Criar grupos corporativos
+  group:
+    name: "{{ item.name }}"
+    gid: "{{ item.gid }}"
+    state: present
+  loop: "{{ grupos }}"
+  loop_control:
+    label: "{{ item.name }} (GID: {{ item.gid }})"
+
+# ---------------------------------------------------------------------------
+# ETAPA 3: Instalar dependências para hash de senha
+# ---------------------------------------------------------------------------
+- name: Instalar python3-passlib para hash de senhas
+  apt:
+    name: python3-passlib
+    state: present
+    update_cache: false
+  ignore_errors: true
+
+# ---------------------------------------------------------------------------
+# ETAPA 4: Criar usuários com senhas hasheadas
+# O filtro password_hash gera um hash SHA-512 seguro
+# ---------------------------------------------------------------------------
+- name: Criar usuários corporativos
+  user:
+    name: "{{ item.name }}"
+    uid: "{{ item.uid }}"
+    group: "{{ item.group }}"
+    groups: "{{ item.groups | join(',') }}"
+    password: "{{ item.password | password_hash('sha512') }}"
+    shell: "{{ item.shell }}"
+    comment: "{{ item.comment }}"
+    create_home: "{{ item.create_home }}"
+    state: present
+  loop: "{{ usuarios }}"
+  loop_control:
+    label: "{{ item.name }} → grupo: {{ item.group }}"
+
+# ---------------------------------------------------------------------------
+# ETAPA 5: Garantir que usuários podem fazer login via SSH com senha
+# ---------------------------------------------------------------------------
+- name: Configurar SSH para permitir autenticação por senha
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^PasswordAuthentication"
+    line: "PasswordAuthentication yes"
+    state: present
+  notify: Reiniciar SSH
+

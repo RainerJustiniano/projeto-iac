@@ -1,0 +1,17 @@
+# Arquivos temporários
+*.zip
+*.tar
+*.log
+
+# Chaves SSH geradas
+*.pem
+*.key
+id_rsa*
+
+# Cache do Ansible
+*.retry
+__pycache__/
+.ansible/
+
+# Ambiente WSL
+.env

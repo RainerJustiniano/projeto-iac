@@ -1,0 +1,54 @@
+# =============================================================================
+# INVENTÁRIO ANSIBLE
+# Define os hosts gerenciados e seus parâmetros de conexão
+# Os containers são acessados via localhost com portas diferentes
+# pois estão rodando no Docker (WSL → porta exposta → container)
+# =============================================================================
+
+# Variáveis globais aplicadas a TODOS os hosts
+[all:vars]
+ansible_user=root
+ansible_password=Lab@2024!
+ansible_connection=ssh
+# Desativa verificação de chave SSH (ambiente de laboratório)
+ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+ansible_python_interpreter=/usr/bin/python3
+
+# ---------------------------------------------------------------------------
+# Grupo: adminsrv — Servidor Administrativo (Service A)
+# ---------------------------------------------------------------------------
+[adminsrv]
+adminsrv ansible_host=127.0.0.1 ansible_port=2210
+
+# ---------------------------------------------------------------------------
+# Grupo: worksrv — Servidor Operacional (Service B)
+# ---------------------------------------------------------------------------
+[worksrv]
+worksrv ansible_host=127.0.0.1 ansible_port=2220
+
+# ---------------------------------------------------------------------------
+# Grupo: datastore — Servidor de Dados (Data Store X)
+# ---------------------------------------------------------------------------
+[datastore]
+datastore ansible_host=127.0.0.1 ansible_port=2230
+
+# ---------------------------------------------------------------------------
+# Grupo: client — Máquina Cliente (Users)
+# ---------------------------------------------------------------------------
+[client]
+client ansible_host=127.0.0.1 ansible_port=2240
+
+# ---------------------------------------------------------------------------
+# Agrupamentos lógicos para aplicar roles por segmento
+# ---------------------------------------------------------------------------
+
+# Todos os servidores (exceto client) recebem configuração completa
+[servers:children]
+adminsrv
+worksrv
+datastore
+
+# Todos os hosts gerenciados
+[all_hosts:children]
+servers
+client

@@ -1,0 +1,80 @@
+---
+# =============================================================================
+# PLAYBOOK PRINCIPAL — Infraestrutura Corporativa Automatizada
+# Executa as roles em ordem para configurar todos os servidores
+#
+# Ordem de execução:
+#   1. users    → cria grupos e usuários com senhas e shells corretos
+#   2. permissions → configura sudo e restrições de acesso
+#   3. directories → cria e protege os diretórios corporativos
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# PLAY 1: Configurar servidores (adminsrv, worksrv, datastore)
+# ---------------------------------------------------------------------------
+- name: Configurar servidores corporativos
+  hosts: servers
+  become: true          # Executa como root (escalada de privilégio)
+  gather_facts: true    # Coleta informações do sistema (SO, IP, etc.)
+
+  roles:
+    - users
+    - permissions
+    - directories
+
+# ---------------------------------------------------------------------------
+# PLAY 2: Configurar máquina cliente
+# O client recebe apenas os usuários (para testes de SSH)
+# ---------------------------------------------------------------------------
+- name: Configurar máquina cliente
+  hosts: client
+  become: true
+  gather_facts: true
+
+  roles:
+    - users
+
+# ---------------------------------------------------------------------------
+# PLAY 3: Verificação pós-configuração
+# Testa se os principais recursos foram criados corretamente
+# ---------------------------------------------------------------------------
+- name: Verificação pós-configuração
+  hosts: servers
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Verificar se grupos foram criados
+      command: getent group {{ item }}
+      loop:
+        - administradores
+        - operadores
+        - convidados
+      register: grupo_check
+      changed_when: false
+
+    - name: Verificar se usuários foram criados
+      command: id {{ item }}
+      loop:
+        - alice
+        - bob
+        - carol
+      register: usuario_check
+      changed_when: false
+
+    - name: Verificar diretórios corporativos
+      stat:
+        path: "{{ item }}"
+      loop:
+        - /admin
+        - /operacao
+        - /publico
+      register: dir_check
+
+    - name: Exibir resumo da verificação
+      debug:
+        msg: |
+          ✅ Host: {{ inventory_hostname }}
+          Grupos criados: administradores, operadores, convidados
+          Usuários criados: alice (admin), bob (operador), carol (convidado)
+          Diretórios: /admin, /operacao, /publico
