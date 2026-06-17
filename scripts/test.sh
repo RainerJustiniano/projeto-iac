@@ -38,7 +38,7 @@ echo ""
 # ============================================================================
 # BLOCO 1: TESTE DE CONTAINERS ATIVOS
 # ============================================================================
-echo -e "${YELLOW}[1/5] VERIFICANDO CONTAINERS${NC}"
+echo -e "${YELLOW}[1/6] VERIFICANDO CONTAINERS${NC}"
 
 for container in dns adminsrv worksrv datastore client; do
     podman inspect --format='{{.State.Running}}' $container 2>/dev/null | grep -q "true"
@@ -50,7 +50,7 @@ echo ""
 # ============================================================================
 # BLOCO 2: TESTES DE REDE — Ping entre hosts autorizados
 # ============================================================================
-echo -e "${YELLOW}[2/5] TESTES DE CONECTIVIDADE (PING)${NC}"
+echo -e "${YELLOW}[2/6] TESTES DE CONECTIVIDADE (PING)${NC}"
 
 # client → adminsrv (mesma rede admin_net) — DEVE funcionar
 podman exec client ping -c 1 -W 2 192.168.10.10 > /dev/null 2>&1
@@ -93,7 +93,7 @@ echo ""
 # ============================================================================
 # BLOCO 3: TESTES DE DNS
 # ============================================================================
-echo -e "${YELLOW}[3/5] TESTES DE RESOLUÇÃO DNS${NC}"
+echo -e "${YELLOW}[3/6] TESTES DE RESOLUÇÃO DNS${NC}"
 
 # Nomes que o DNS interno deve resolver
 declare -A dns_map
@@ -120,7 +120,7 @@ echo ""
 # ============================================================================
 # BLOCO 4: TESTES SSH E USUÁRIOS
 # ============================================================================
-echo -e "${YELLOW}[4/5] TESTES SSH E AUTENTICAÇÃO DE USUÁRIOS${NC}"
+echo -e "${YELLOW}[4/6] TESTES SSH E AUTENTICAÇÃO DE USUÁRIOS${NC}"
 
 # alice (administradora) deve acessar adminsrv
 sshpass -p "Alice@2024!" ssh $SSH_OPTS -p 2210 alice@localhost "echo OK" > /dev/null 2>&1
@@ -139,7 +139,7 @@ echo ""
 # ============================================================================
 # BLOCO 5: TESTES DE PERMISSÕES
 # ============================================================================
-echo -e "${YELLOW}[5/5] TESTES DE PERMISSÕES EM DIRETÓRIOS${NC}"
+echo -e "${YELLOW}[5/6] TESTES DE PERMISSÕES EM DIRETÓRIOS${NC}"
 
 # alice pode ler /admin
 sshpass -p "Alice@2024!" ssh $SSH_OPTS -p 2210 alice@localhost "ls /admin" > /dev/null 2>&1
@@ -180,6 +180,35 @@ else
     echo -e "  ${RED}[FAIL]${NC} BLOQUEIO: bob tem sudo geral — verificar sudoers!"
     ((FAIL++))
 fi
+
+# bob DEVE conseguir rodar o script liberado via sudo
+sshpass -p "Bob@2024!" ssh $SSH_OPTS -p 2220 bob@localhost "sudo /operacao/scripts/status.sh" > /dev/null 2>&1
+resultado $? "bob pode executar /operacao/scripts/status.sh via sudo"
+
+echo ""
+
+# ============================================================================
+# BLOCO 6: TESTES DO DATA STORE X (ds_reader / ds_writer)
+# ============================================================================
+echo -e "${YELLOW}[6/6] TESTES DO DATA STORE X${NC}"
+
+# ds_reader deve conseguir ler /datastore/readonly
+sshpass -p "Reader@2024!" ssh $SSH_OPTS -p 2230 ds_reader@localhost "ls /datastore/readonly" > /dev/null 2>&1
+resultado $? "ds_reader (Service A) pode listar /datastore/readonly"
+
+# ds_reader NÃO deve conseguir escrever em /datastore/readonly
+sshpass -p "Reader@2024!" ssh $SSH_OPTS -p 2230 ds_reader@localhost "touch /datastore/readonly/teste.txt" > /dev/null 2>&1
+if [ $? -ne 0 ]; then
+    echo -e "  ${GREEN}[PASS]${NC} BLOQUEIO: ds_reader não escreve em /datastore/readonly ✓"
+    ((PASS++))
+else
+    echo -e "  ${RED}[FAIL]${NC} BLOQUEIO: ds_reader conseguiu escrever em /datastore/readonly!"
+    ((FAIL++))
+fi
+
+# ds_writer deve conseguir ler e escrever em /datastore/readwrite
+sshpass -p "Writer@2024!" ssh $SSH_OPTS -p 2230 ds_writer@localhost "echo teste >> /datastore/readwrite/operacoes.log" > /dev/null 2>&1
+resultado $? "ds_writer (Service B) pode escrever em /datastore/readwrite"
 
 # ============================================================================
 # RESUMO FINAL

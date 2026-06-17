@@ -16,24 +16,26 @@ Disciplina: Conteinerização e Orquestração
 7. [Configuração DNS (CoreDNS)](#configuração-dns-coredns)
 8. [Automação com Ansible](#automação-com-ansible)
 9. [Permissões e Controle de Acesso](#permissões-e-controle-de-acesso)
-10. [Testes Obrigatórios](#testes-obrigatórios)
-11. [Troubleshooting](#troubleshooting)
+10. [Testes Automatizados](#testes-automatizados)
+11. [Limitações Conhecidas](#limitações-conhecidas)
+12. [Troubleshooting](#troubleshooting)
 
 ---
 
 ## Visão Geral
 
-Este projeto implementa uma **mini infraestrutura corporativa reproduzível por código** (*Infrastructure as Code — IaC*), utilizando Docker, Docker Compose e Ansible. O ambiente simula uma empresa com dois segmentos de rede isolados: Administrativo e Operacional, além de um servidor de dados centralizado.
+Este projeto implementa uma **mini infraestrutura corporativa reproduzível por código** (*Infrastructure as Code — IaC*), utilizando **Podman**, **Ansible** e **CoreDNS**. O ambiente simula uma empresa com dois segmentos de rede isolados — Administrativo e Operacional — além de um servidor de dados centralizado.
 
 **Tecnologias utilizadas:**
 
 | Tecnologia | Versão | Função |
 |---|---|---|
-| Docker | 24+ | Criação e execução dos containers |
-| Docker Compose | v2 | Orquestração dos containers |
-| Ansible | 2.15+ | Automação de configuração |
+| Podman | 4.x+ | Criação e execução dos containers (sem precisar de Docker Desktop) |
+| Ansible | 2.x+ | Automação de configuração (usuários, permissões, diretórios) |
 | CoreDNS | 1.11.1 | Servidor DNS interno |
 | Ubuntu | 22.04 | Sistema base dos containers |
+
+> **Por que Podman e não Docker?** Este projeto foi originalmente desenhado para Docker + Docker Compose (e o `docker-compose.yml` continua no repositório, funcional, para quem tem Docker Engine real disponível). No ambiente de desenvolvimento usado (Windows + WSL com pouco espaço em disco), optamos por Podman, que não exige o Docker Desktop. Para subir a infraestrutura com Podman, use o script `setup.sh` (não o `docker-compose.yml` — veja o motivo na seção [Como Executar](#como-executar)).
 
 ---
 
@@ -92,8 +94,8 @@ O diagrama Ilograph fornecido foi mapeado para componentes reais de infraestrutu
 
 - `Users → Service A` (Use): client acessa adminsrv via SSH na admin_net
 - `Users → Service B` (Use): client acessa worksrv via SSH na work_net
-- `Service A → Data Store X` (Read): adminsrv acessa /datastore/readonly
-- `Service B → Data Store X` (Read/Write): worksrv acessa /datastore/readwrite
+- `Service A → Data Store X` (Read): adminsrv acessa /datastore/readonly via usuário de serviço `ds_reader`
+- `Service B → Data Store X` (Read/Write): worksrv acessa /datastore/readwrite via usuário de serviço `ds_writer`
 
 ---
 
@@ -102,21 +104,19 @@ O diagrama Ilograph fornecido foi mapeado para componentes reais de infraestrutu
 ### No Windows com WSL Ubuntu
 
 ```bash
-# 1. Instalar Docker Desktop (Windows)
-# Baixar em: https://www.docker.com/products/docker-desktop/
-# Habilitar integração com WSL2 nas configurações do Docker Desktop
+# 1. Instalar WSL Ubuntu (PowerShell como Administrador, no Windows)
+wsl --install -d Ubuntu
 
-# 2. No terminal WSL Ubuntu, verificar se Docker está disponível:
-docker --version
-docker compose version
-
-# 3. Instalar Ansible no WSL Ubuntu
+# 2. Dentro do WSL Ubuntu, instalar Podman e dependências
 sudo apt update
-sudo apt install -y ansible sshpass python3-pip
+sudo apt install -y podman ansible sshpass git
 
-# 4. Verificar versão do Ansible
+# 3. Verificar instalação
+podman --version
 ansible --version
 ```
+
+> Se você tem Docker Engine real disponível (Linux nativo ou Docker Desktop com espaço em disco sobrando), pode usar `docker-compose.yml` em vez de Podman — veja a seção [Como Executar](#como-executar).
 
 ---
 
@@ -125,7 +125,8 @@ ansible --version
 ```
 projeto-iac/
 │
-├── docker-compose.yml          # Orquestração dos containers e redes
+├── setup.sh                     # Script único: builda, sobe, configura e testa tudo (Podman)
+├── docker-compose.yml           # Alternativa para quem usa Docker Engine real
 │
 ├── containers/
 │   ├── base/
@@ -141,6 +142,7 @@ projeto-iac/
 │   └── roles/
 │       ├── users/              # Criação de grupos e usuários
 │       │   ├── tasks/main.yml
+│       │   ├── handlers/main.yml
 │       │   └── vars/main.yml
 │       ├── permissions/        # Sudo e controle de acesso
 │       │   └── tasks/main.yml
@@ -157,56 +159,45 @@ projeto-iac/
 
 ## Como Executar
 
-### Passo 1 — Construir e subir os containers
+### Opção A — Podman (recomendada, usada no desenvolvimento deste projeto)
+
+Um único comando builda as imagens, cria as redes, sobe os 5 containers, roda o Ansible e executa os testes:
 
 ```bash
-# Na raiz do projeto (onde está o docker-compose.yml)
-cd projeto-iac/
+git clone https://github.com/RainerJustiniano/projeto-iac.git
+cd projeto-iac
+bash setup.sh
+```
 
-# Constrói as imagens e sobe todos os containers
+Ao final você verá as credenciais de acesso SSH no terminal. Para refazer tudo do zero, basta rodar `bash setup.sh` novamente — o script remove containers e redes anteriores antes de recriar.
+
+> **Por que não usar `podman-compose`?** A versão 1.0.6 do `podman-compose` tem um bug conhecido: ela aplica a flag `--ip` em **todas** as redes de um container simultaneamente, mesmo quando você só define IP fixo em uma rede. Isso quebra qualquer container conectado a mais de uma rede (erro `--ip can only be set for a single network`). O `setup.sh` contorna isso criando cada container com `podman run` e conectando as redes extras depois, via `podman network connect`.
+
+### Opção B — Docker Engine real
+
+Se você tem Docker instalado (não Docker Desktop sem espaço, e sim um Docker funcional):
+
+```bash
 docker compose up -d --build
-
-# Verificar se todos estão rodando
 docker compose ps
 ```
 
-Saída esperada:
-```
-NAME         STATUS    PORTS
-adminsrv     running   0.0.0.0:2210->22/tcp
-client       running   0.0.0.0:2240->22/tcp
-datastore    running   0.0.0.0:2230->22/tcp
-dns          running
-worksrv      running   0.0.0.0:2220->22/tcp
-```
+A partir daqui, os passos do Ansible e dos testes são os mesmos (trocando `podman` por `docker` nos comandos manuais).
 
-### Passo 2 — Executar o Playbook Ansible
+### Rodando o Ansible manualmente (opcional, já incluso no setup.sh)
 
 ```bash
-# A partir do diretório ansible/
 cd ansible/
-
-# Testar conectividade com todos os hosts
 ansible all -i inventory -m ping
-
-# Executar o playbook completo
 ansible-playbook -i inventory playbook.yml
-
-# Executar com saída detalhada (verbose)
-ansible-playbook -i inventory playbook.yml -v
 ```
 
-### Passo 3 — Executar os testes
+### Rodando os testes manualmente (opcional, já incluso no setup.sh)
 
 ```bash
-# Instalar dependência sshpass (necessário para testes SSH)
-sudo apt install -y sshpass
-
-# Tornar o script executável (já configurado, mas por segurança)
-chmod +x scripts/test.sh
-
-# Executar todos os testes
-./scripts/test.sh
+cd scripts/
+chmod +x test.sh
+./test.sh
 ```
 
 ---
@@ -233,18 +224,17 @@ O plugin `hosts` funciona como um `/etc/hosts` centralizado para toda a rede:
 192.168.10.2   dns.lab
 ```
 
+> **Nota técnica:** a imagem oficial `coredns/coredns` é construída `FROM scratch` (sem shell, sem `$PATH`) e o binário fica em `/coredns`. Por isso o `Dockerfile` em `containers/dns/` usa `ENTRYPOINT ["/coredns"]` com caminho absoluto — usar apenas `"coredns"` falha com `executable file not found in $PATH`.
+
 ### Testar manualmente
 
 ```bash
-# A partir do container client
-docker exec -it client bash
+podman exec -it client bash
 
-# Testar resolução DNS
 nslookup adminsrv.lab 192.168.10.2
 nslookup worksrv.lab 192.168.10.2
 nslookup datastore.lab 192.168.10.2
 
-# Ou usando dig
 dig @192.168.10.2 adminsrv.lab
 ```
 
@@ -252,7 +242,7 @@ dig @192.168.10.2 adminsrv.lab
 
 ## Automação com Ansible
 
-O Ansible automatiza **toda** a configuração dos servidores sem intervenção manual. Três roles compõem o playbook:
+O Ansible automatiza **toda** a configuração dos servidores sem intervenção manual. Três roles compõem o playbook, executadas em ordem: `users` → `permissions` → `directories`.
 
 ### Role: users
 
@@ -264,6 +254,8 @@ Cria grupos e usuários com shells e senhas corretos.
 | `bob` | operadores | /bin/bash | Operador — acesso restrito |
 | `carol` | convidados | /bin/rbash | Convidada — leitura apenas |
 
+> O filtro `password_hash()` usado para gerar os hashes SHA-512 roda na **máquina de controle** (seu WSL), não no container remoto — é por isso que não há instalação de `passlib` dentro dos containers.
+
 ### Role: permissions
 
 Configura o `/etc/sudoers.d/` por grupo:
@@ -271,8 +263,10 @@ Configura o `/etc/sudoers.d/` por grupo:
 | Grupo | Permissão Sudo |
 |---|---|
 | administradores | `ALL=(ALL:ALL) NOPASSWD: ALL` |
-| operadores | Apenas scripts em `/operacao/scripts/*.sh` |
+| operadores | Apenas `/operacao/scripts/*.sh` |
 | convidados | Nenhuma |
+
+Também cria, somente no container `datastore`, os usuários de serviço `ds_reader` (grupo operadores) e `ds_writer` (grupo administradores), que representam o Service A e o Service B do diagrama acessando o Data Store X.
 
 ### Role: directories
 
@@ -283,8 +277,8 @@ Cria a estrutura de diretórios corporativos com ACLs:
 | `/admin` | root | administradores | `0770` | Somente admins |
 | `/operacao` | root | administradores | `0750` + ACL | Admins + Operadores |
 | `/publico` | root | root | `1777` | Todos (sticky bit) |
-| `/datastore/readonly` | root | operadores | `0750` | Leitura — Service A |
-| `/datastore/readwrite` | root | administradores | `0770` | Escrita — Service B |
+| `/datastore/readonly` | root | operadores | `0750` + ACL | Leitura — `ds_reader` |
+| `/datastore/readwrite` | root | administradores | `0770` + ACL | Escrita — `ds_writer` |
 
 ---
 
@@ -303,110 +297,91 @@ Diretório        alice(admin)  bob(operador)  carol(convidado)
 ### Sudo
 
 ```
-alice@adminsrv:~$ sudo whoami    → root  (permitido)
-bob@worksrv:~$ sudo whoami       → erro  (negado)
-bob@worksrv:~$ sudo /operacao/scripts/status.sh  → OK  (permitido)
+alice@adminsrv:~$ sudo whoami                       → root  (permitido)
+bob@worksrv:~$ sudo whoami                          → erro  (negado)
+bob@worksrv:~$ sudo /operacao/scripts/status.sh      → OK   (permitido)
 ```
 
 ---
 
-## Testes Obrigatórios
+## Testes Automatizados
 
-### Testes de Rede
-
-```bash
-# Ping autorizado — mesma rede
-docker exec client ping -c 3 192.168.10.10   # client → adminsrv ✓
-docker exec client ping -c 3 192.168.20.10   # client → worksrv ✓
-
-# Isolamento — redes diferentes
-docker exec client ping -c 3 192.168.30.30   # client → datastore ✗ (bloqueado)
-docker exec adminsrv ping -c 3 192.168.20.10 # admin_net → work_net ✗ (bloqueado)
-```
-
-### Testes DNS
+O `scripts/test.sh` valida 6 blocos: containers ativos, conectividade/isolamento de rede, resolução DNS, SSH e autenticação, permissões de diretório e os usuários de serviço do Data Store X (`ds_reader`/`ds_writer`).
 
 ```bash
-docker exec client nslookup adminsrv.lab
-# Esperado: 192.168.10.10
-
-docker exec client nslookup worksrv.lab
-# Esperado: 192.168.20.10
-
-docker exec client nslookup datastore.lab
-# Esperado: 192.168.30.30
+cd scripts/
+./test.sh
 ```
 
-### Testes SSH
+Resultado esperado: **24 de 26 testes passam**. Os 2 que falham são esperados — veja a seção abaixo.
 
-```bash
-# Login como administradora
-ssh -p 2210 alice@localhost   # senha: Alice@2024!
+---
 
-# Login como operador
-ssh -p 2220 bob@localhost     # senha: Bob@2024!
+## Limitações Conhecidas
 
-# Login como convidado
-ssh -p 2220 carol@localhost   # senha: Carol@2024!
-```
+### Isolamento ICMP entre redes não autorizadas
 
-### Testes de Permissão
+Para que o `ping` funcionasse entre redes **autorizadas** (ex.: client → adminsrv), foi necessário adicionar a capability `--cap-add NET_RAW` aos containers no Podman rootless. Essa capability também permite ICMP entre redes que deveriam estar isoladas (ex.: client → datastore), fazendo 2 dos 26 testes do `test.sh` falharem.
 
-```bash
-# Como alice — deve funcionar
-ssh -p 2210 alice@localhost "ls /admin"
-ssh -p 2210 alice@localhost "sudo whoami"
+**O isolamento real (TCP/UDP) continua funcionando** — apenas o protocolo ICMP (usado pelo `ping`) é afetado. Em um ambiente de produção, esse cenário seria resolvido com regras de firewall (`iptables`/`nftables`) explícitas, independentes da capability de rede do container.
 
-# Como bob — leitura OK, admin bloqueado
-ssh -p 2220 bob@localhost "ls /operacao"
-ssh -p 2220 bob@localhost "ls /admin"    # Deve retornar: Permission denied
+### `docker-compose.yml` não funciona com `podman-compose`
 
-# Como carol — apenas /publico
-ssh -p 2220 carol@localhost "ls /publico"
-ssh -p 2220 carol@localhost "ls /admin"  # Deve retornar: Permission denied
-```
+Ver explicação completa na seção [Como Executar](#como-executar). Use `setup.sh` com Podman, ou `docker compose` com Docker Engine real.
 
 ---
 
 ## Troubleshooting
 
-### Docker não conecta no WSL
+### Podman não encontrado no WSL
 
 ```bash
-# Verificar se o Docker Desktop está rodando no Windows
-# Nas configurações do Docker Desktop: Settings → Resources → WSL Integration
-# Habilitar para a distro Ubuntu
+sudo apt update
+sudo apt install -y podman
+```
+
+### Ansible falha com "to use the 'ssh' connection type... you must install the sshpass program"
+
+```bash
+sudo apt install -y sshpass
 ```
 
 ### Ansible falha com "connection refused"
 
 ```bash
+# Verificar se os containers estão de pé
+podman ps
+
 # Verificar se as portas estão abertas
-ss -tlnp | grep 221
+ss -tlnp | grep -E "2210|2220|2230|2240"
 
-# Aguardar containers iniciarem completamente
-docker compose up -d && sleep 10 && ansible all -i ansible/inventory -m ping
+# Aguardar containers iniciarem completamente antes do Ansible
+sleep 8 && ansible all -i ansible/inventory -m ping
 ```
 
-### Erro de autenticação SSH
+### Erro de autenticação SSH (senha não aceita)
+
+Confirme que está digitando exatamente `Alice@2024!` (A maiúsculo, arroba, exclamação) — teclados em PT-BR às vezes trocam esses caracteres especiais. Teste sem digitar manualmente:
 
 ```bash
-# Testar conexão manual primeiro
-ssh -o StrictHostKeyChecking=no -p 2210 root@localhost
-# senha: Lab@2024!
+sshpass -p "Alice@2024!" ssh -o StrictHostKeyChecking=no -p 2210 alice@localhost "whoami"
 ```
 
-### Parar e limpar o ambiente
+### Erro "executable file 'coredns' not found in \$PATH"
+
+Esse erro ocorre se você reconstruir a imagem DNS a partir do `Dockerfile` antigo. A versão atual já está corrigida (`ENTRYPOINT ["/coredns"]`, caminho absoluto). Se aparecer, confirme que está usando a versão mais recente do repositório (`git pull`).
+
+### Parar e limpar o ambiente (Podman)
 
 ```bash
-# Para os containers
-docker compose down
+podman rm -f dns adminsrv worksrv datastore client
+podman network rm -f admin_net work_net data_net
+```
 
-# Remove containers, redes e volumes
-docker compose down -v --rmi local
+### Refazer tudo do zero
 
-# Rebuild completo
-docker compose up -d --build --force-recreate
+```bash
+bash setup.sh
 ```
 
 ---

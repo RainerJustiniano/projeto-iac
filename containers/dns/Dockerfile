@@ -11,5 +11,9 @@ EXPOSE 53/udp
 EXPOSE 53/tcp
 
 # Inicia o CoreDNS apontando para o Corefile
-ENTRYPOINT ["coredns"]
+# IMPORTANTE: a imagem base é "FROM scratch" — não tem $PATH nem shell.
+# O binário fica em /coredns (caminho absoluto), por isso o ENTRYPOINT
+# precisa apontar para "/coredns" e não para "coredns" (que falharia
+# com "executable file not found in $PATH").
+ENTRYPOINT ["/coredns"]
 CMD ["-conf", "/etc/coredns/Corefile"]

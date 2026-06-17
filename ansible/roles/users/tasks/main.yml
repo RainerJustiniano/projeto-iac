@@ -33,14 +33,13 @@
     label: "{{ item.name }} (GID: {{ item.gid }})"
 
 # ---------------------------------------------------------------------------
-# ETAPA 3: Instalar dependências para hash de senha
+# ETAPA 3: Hash de senha (SHA-512)
+# O filtro password_hash() roda na MÁQUINA DE CONTROLE (seu WSL), não no
+# container remoto — por isso não instalamos nada aqui. O pacote python3
+# com suporte a passlib já vem junto com o pacote "ansible" (não "ansible-core")
+# instalado no WSL. Se você usa ansible-core sozinho, instale no WSL com:
+#   sudo apt install -y python3-passlib
 # ---------------------------------------------------------------------------
-- name: Instalar python3-passlib para hash de senhas
-  apt:
-    name: python3-passlib
-    state: present
-    update_cache: false
-  ignore_errors: true
 
 # ---------------------------------------------------------------------------
 # ETAPA 4: Criar usuários com senhas hasheadas

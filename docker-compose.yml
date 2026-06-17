@@ -1,5 +1,16 @@
 version: '3.8'
 
+# =============================================================================
+# AVISO IMPORTANTE
+# Este arquivo funciona com Docker Engine real + "docker compose" (plugin v2).
+# Se você está usando Podman no WSL (caso mais comum neste projeto, por causa
+# de espaço em disco), NÃO use este arquivo — use "bash setup.sh" na raiz do
+# projeto. O "podman-compose" tem um bug conhecido (versão 1.0.6) que força
+# a flag --ip em todas as redes de um container simultaneamente, o que é
+# inválido e quebra qualquer container com mais de uma rede.
+# Ver: README.md → seção "Como Executar"
+# =============================================================================
+
 networks:
   admin_net:
     driver: bridge
@@ -35,7 +46,8 @@ services:
     networks:
       admin_net:
         ipv4_address: 192.168.10.2
-      work_net: {}
+      work_net:
+        ipv4_address: 192.168.20.2
     restart: unless-stopped
 
   adminsrv:
@@ -47,7 +59,8 @@ services:
     networks:
       admin_net:
         ipv4_address: 192.168.10.10
-      data_net: {}
+      data_net:
+        ipv4_address: 192.168.30.10
     ports:
       - "2210:22"
     depends_on:
@@ -63,7 +76,8 @@ services:
     networks:
       work_net:
         ipv4_address: 192.168.20.10
-      data_net: {}
+      data_net:
+        ipv4_address: 192.168.30.20
     ports:
       - "2220:22"
     depends_on:
@@ -91,7 +105,8 @@ services:
     networks:
       admin_net:
         ipv4_address: 192.168.10.100
-      work_net: {}
+      work_net:
+        ipv4_address: 192.168.20.100
     ports:
       - "2240:22"
     depends_on:

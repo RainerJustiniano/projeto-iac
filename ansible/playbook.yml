@@ -27,7 +27,7 @@
 # O client recebe apenas os usuários (para testes de SSH)
 # ---------------------------------------------------------------------------
 - name: Configurar máquina cliente
-  hosts: client
+  hosts: client_grp
   become: true
   gather_facts: true
 

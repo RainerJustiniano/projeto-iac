@@ -12,6 +12,8 @@ ENV DEBIAN_FRONTEND=noninteractive
 # - net-tools: ferramentas de rede legadas (ifconfig, netstat)
 # - python3: obrigatório para o Ansible operar no host remoto
 # - curl: testes HTTP para o worksrv
+# - acl: necessário para o módulo "acl" do Ansible (setfacl/getfacl) —
+#   pré-instalado aqui para não reinstalar em toda execução do playbook
 RUN apt-get update && apt-get install -y \
     openssh-server \
     sudo \
@@ -22,6 +24,7 @@ RUN apt-get update && apt-get install -y \
     python3 \
     curl \
     vim \
+    acl \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Cria o diretório necessário para o daemon SSH

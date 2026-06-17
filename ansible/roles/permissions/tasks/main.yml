@@ -23,6 +23,19 @@
 # Operadores só podem executar scripts específicos em /operacao/scripts/
 # Isso implementa o princípio do menor privilégio
 # ---------------------------------------------------------------------------
+# Garante que /operacao já existe com o dono/grupo corretos ANTES de criar
+# o subdiretório /scripts. Sem isso, o Ansible criaria /operacao como
+# root:root automaticamente (mkdir -p implícito) e só corrigiria o dono
+# mais tarde, na role "directories" — funciona pela ordem das roles, mas
+# fica frágil. Esta task deixa o resultado correto independente da ordem.
+- name: Garantir que /operacao existe com dono correto
+  file:
+    path: /operacao
+    state: directory
+    owner: root
+    group: administradores
+    mode: '0750'
+
 - name: Criar diretório de scripts para operadores
   file:
     path: /operacao/scripts
