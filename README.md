@@ -193,7 +193,7 @@ Quando terminar de usar a infraestrutura (ex.: depois da apresentação, ou pra 
 bash teardown.sh
 ```
 
-Isso para e remove os 5 containers e as 3 redes (`admin_net`, `work_net`, `data_net`). As imagens já buildadas (`projeto-iac/base`, `coredns/coredns`) **não são removidas** — assim, rodar `bash setup.sh` de novo é rápido, sem precisar rebuildar do zero.
+Isso para e remove os 5 containers e as 3 redes (`admin_net`, `work_net`, `data_net`). As imagens já buildadas (`projeto-iac/base`, `docker.io/coredns/coredns`) **não são removidas** — assim, rodar `bash setup.sh` de novo é rápido, sem precisar rebuildar do zero.
 
 > Se quiser só **pausar** sem remover (pra religar depois sem rebuildar nada), use `podman stop dns adminsrv worksrv datastore client` e depois `podman start` nos mesmos nomes — mais rápido que remover e recriar.
 
@@ -221,7 +221,7 @@ O plugin `hosts` funciona como um `/etc/hosts` centralizado para toda a rede:
 192.168.10.2   dns.lab
 ```
 
-> **Nota técnica:** a imagem oficial `coredns/coredns` é construída `FROM scratch` (sem shell, sem `$PATH`) e o binário fica em `/coredns`. Por isso o `Dockerfile` em `containers/dns/` usa `ENTRYPOINT ["/coredns"]` com caminho absoluto — usar apenas `"coredns"` falha com `executable file not found in $PATH`.
+> **Nota técnica:** a imagem oficial `docker.io/coredns/coredns` é construída `FROM scratch` (sem shell, sem `$PATH`) e o binário fica em `/coredns`. Por isso o `Dockerfile` em `containers/dns/` usa `ENTRYPOINT ["/coredns"]` com caminho absoluto — usar apenas `"coredns"` falha com `executable file not found in $PATH`.
 
 ### Testar manualmente
 
@@ -310,7 +310,7 @@ cd scripts/
 ./test.sh
 ```
 
-Resultado esperado: **24 de 26 testes passam**. Os 2 que falham são esperados — veja a seção abaixo.
+Resultado esperado: **24 de 26 testes passam**. Os 2 que falham são esperados e bem documentados — veja a seção [Limitações Conhecidas](#limitações-conhecidas).
 
 ---
 
@@ -318,9 +318,34 @@ Resultado esperado: **24 de 26 testes passam**. Os 2 que falham são esperados �
 
 ### Isolamento ICMP entre redes não autorizadas
 
-Para que o `ping` funcionasse entre redes **autorizadas** (ex.: client → adminsrv), foi necessário adicionar a capability `--cap-add NET_RAW` aos containers no Podman rootless. Essa capability também permite ICMP entre redes que deveriam estar isoladas (ex.: client → datastore), fazendo 2 dos 26 testes do `test.sh` falharem.
+Para que o `ping` funcionasse entre redes **autorizadas** (ex.: client → adminsrv), foi necessário adicionar a capability `--cap-add NET_RAW` aos containers no Podman rootless. Essa capability também permite ICMP entre redes que deveriam estar isoladas (ex.: client → datastore, adminsrv → worksrv), fazendo 2 dos 26 testes do `test.sh` falharem.
 
-**O isolamento real (TCP/UDP) continua funcionando** — apenas o protocolo ICMP (usado pelo `ping`) é afetado. Em um ambiente de produção, esse cenário seria resolvido com regras de firewall (`iptables`/`nftables`) explícitas, independentes da capability de rede do container.
+**O isolamento real de dados (TCP/UDP) continua funcionando.** Apenas o protocolo ICMP (usado pelo `ping`) é afetado — ou seja, é possível "ouvir" a outra rede responder a um ping, mas não estabelecer conexões de aplicação reais através dela.
+
+### Por que isso não foi corrigido com firewall (investigação documentada)
+
+Tentamos corrigir isso de duas formas diferentes, e ambas revelaram limitações reais e específicas do Podman **rootless** rodando em **WSL2** — vale a pena documentar, porque mostra exatamente onde a abstração de containers sem privilégios encontra seus limites:
+
+**Tentativa 1 — Bloquear no host, via `iptables` na chain `FORWARD`:**
+
+A teoria: todo tráfego entre redes diferentes do Podman passa pelo roteamento do host, então bloquear ali deveria bastar. Na prática, **não funcionou**: inserimos regras `DROP` no topo da chain `FORWARD` e confirmamos, com `iptables -L FORWARD -n -v`, que o contador de pacotes permanecia em **0** mesmo enquanto o `ping` continuava passando normalmente. Isso indica que o WSL2 entrega esse tráfego por um caminho de rede próprio (provavelmente sua camada de virtualização de rede baseada em Hyper-V), que não passa pelo caminho padrão de roteamento do kernel Linux onde o `iptables` do host atua.
+
+**Tentativa 2 — Bloquear dentro do próprio container, via `iptables` na chain `OUTPUT`:**
+
+Se o host não intercepta o tráfego, a alternativa é bloquear *antes* de ele saber do container, usando a capability `NET_ADMIN`. Também **não funcionou** — mas por um motivo diferente e ainda mais fundamental:
+
+```
+$ podman exec client iptables -L OUTPUT -n -v
+iptables v1.8.7 (nf_tables): Could not fetch rule set generation id: Permission denied (you must be root)
+
+$ podman exec client cat /proc/self/uid_map
+         0       1000          1
+         1     100000      65536
+```
+
+O `uid_map` revela o motivo: dentro do container, `UID 0` (root) é apenas um **mapeamento de namespace** para o `UID 1000` real do usuário no host (você mesmo, sem privilégios elevados) — não é root de verdade. O subsistema `nftables`/`iptables-nft` do kernel exige privilégio genuíno do host para alterar regras de firewall, e isso é, por definição, exatamente o que o Podman **rootless** evita conceder — é uma característica de segurança, não um bug.
+
+**Conclusão:** uma correção real exigiria rodar o Podman em modo **rootful** (com privilégio de root genuíno), uma mudança de arquitetura mais ampla que foge do escopo deste projeto. Em um ambiente de produção real (ou com Docker/Podman rootful), isso seria resolvido com regras de firewall no host sem nenhuma das limitações acima.
 
 ---
 
@@ -363,6 +388,47 @@ sshpass -p "Alice@2024!" ssh -o StrictHostKeyChecking=no -p 2210 alice@localhost
 ### Erro "executable file 'coredns' not found in \$PATH"
 
 Esse erro ocorre se você reconstruir a imagem DNS a partir do `Dockerfile` antigo. A versão atual já está corrigida (`ENTRYPOINT ["/coredns"]`, caminho absoluto). Se aparecer, confirme que está usando a versão mais recente do repositório (`git pull`).
+
+### Erro `short-name "coredns/coredns:1.11.1" did not resolve to an alias`
+
+```
+Error: short-name "coredns/coredns:1.11.1" did not resolve to an alias and no
+unqualified-search registries are defined in "/etc/containers/registries.conf"
+```
+
+Esse erro acontece quando a máquina não tem um registro padrão configurado (`/etc/containers/registries.conf`) — comum em instalações novas do Podman, varia de máquina para máquina. O `setup.sh` já usa o nome completo (`docker.io/coredns/coredns:1.11.1`) para evitar esse problema. Se você ainda assim encontrar esse erro:
+
+```bash
+# Confirme que está usando a versão mais recente do script
+git pull
+bash teardown.sh
+bash setup.sh
+```
+
+Se persistir, configure o registro padrão manualmente:
+
+```bash
+echo 'unqualified-search-registries = ["docker.io"]' | sudo tee -a /etc/containers/registries.conf
+```
+
+### Já tenho a pasta `projeto-iac` mas o `git clone` falha com "already exists"
+
+Se você (ou seu professor/colega) já clonou o repositório antes e quer atualizar para a versão mais recente, não precisa clonar de novo — basta atualizar:
+
+```bash
+cd ~/projeto-iac
+git pull
+bash setup.sh
+```
+
+Se preferir começar do zero (ex.: a pasta está com alterações locais bagunçadas):
+
+```bash
+rm -rf ~/projeto-iac
+git clone https://github.com/RainerJustiniano/projeto-iac.git
+cd projeto-iac
+bash setup.sh
+```
 
 ### Parar e limpar o ambiente (Podman)
 

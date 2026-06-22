@@ -1,4 +1,4 @@
-FROM coredns/coredns:1.11.1
+FROM docker.io/coredns/coredns:1.11.1
 
 # Copia o arquivo de configuração principal do CoreDNS
 COPY Corefile /etc/coredns/Corefile
