@@ -7,20 +7,12 @@ echo -e "${BLUE}${BOLD}   INFRAESTRUTURA CORPORATIVA — Setup Automático      
 echo -e "${BLUE}${BOLD}   github.com/RainerJustiniano/projeto-iac                 ${NC}"
 echo -e "${BLUE}${BOLD}============================================================${NC}"
 
-echo -e "\n${YELLOW}[1/5] Instalando dependências...${NC}"
+echo -e "\n${YELLOW}[1/4] Instalando dependências...${NC}"
 sudo apt-get update -qq
 sudo apt-get install -y podman ansible sshpass git -qq
 echo -e "  ${GREEN}✓${NC} Dependências instaladas"
 
-echo -e "\n${YELLOW}[2/5] Clonando repositório...${NC}"
-if [ -d "$HOME/projeto-iac" ]; then
-    cd "$HOME/projeto-iac" && git pull -q
-else
-    git clone -q https://github.com/RainerJustiniano/projeto-iac.git "$HOME/projeto-iac"
-fi
-cd "$HOME/projeto-iac"
-
-echo -e "\n${YELLOW}[3/5] Criando infraestrutura...${NC}"
+echo -e "\n${YELLOW}[2/4] Criando infraestrutura...${NC}"
 podman rm -f dns adminsrv worksrv datastore client 2>/dev/null
 podman network rm -f admin_net work_net data_net 2>/dev/null
 podman network rm -f projeto-iac_admin_net projeto-iac_work_net projeto-iac_data_net 2>/dev/null
@@ -65,11 +57,11 @@ podman network connect work_net client
 echo "  Aguardando containers..."
 sleep 8
 
-echo -e "\n${YELLOW}[4/5] Executando Ansible...${NC}"
+echo -e "\n${YELLOW}[3/4] Executando Ansible...${NC}"
 cd "$HOME/projeto-iac/ansible"
 ansible-playbook -i inventory playbook.yml 2>&1 | grep -E "PLAY RECAP|ok=|failed=|changed="
 
-echo -e "\n${YELLOW}[5/5] Rodando testes...${NC}"
+echo -e "\n${YELLOW}[4/4] Rodando testes...${NC}"
 cd "$HOME/projeto-iac/scripts"
 chmod +x test.sh
 ./test.sh

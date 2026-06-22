@@ -35,7 +35,7 @@ Este projeto implementa uma **mini infraestrutura corporativa reproduzível por 
 | CoreDNS | 1.11.1 | Servidor DNS interno |
 | Ubuntu | 22.04 | Sistema base dos containers |
 
-> **Por que Podman e não Docker?** Este projeto foi originalmente desenhado para Docker + Docker Compose (e o `docker-compose.yml` continua no repositório, funcional, para quem tem Docker Engine real disponível). No ambiente de desenvolvimento usado (Windows + WSL com pouco espaço em disco), optamos por Podman, que não exige o Docker Desktop. Para subir a infraestrutura com Podman, use o script `setup.sh` (não o `docker-compose.yml` — veja o motivo na seção [Como Executar](#como-executar)).
+> **Por que Podman?** No ambiente de desenvolvimento usado (Windows + WSL com pouco espaço em disco), o Podman foi escolhido por não exigir o Docker Desktop instalado.
 
 ---
 
@@ -116,8 +116,6 @@ podman --version
 ansible --version
 ```
 
-> Se você tem Docker Engine real disponível (Linux nativo ou Docker Desktop com espaço em disco sobrando), pode usar `docker-compose.yml` em vez de Podman — veja a seção [Como Executar](#como-executar).
-
 ---
 
 ## Estrutura do Projeto
@@ -126,7 +124,7 @@ ansible --version
 projeto-iac/
 │
 ├── setup.sh                     # Script único: builda, sobe, configura e testa tudo (Podman)
-├── docker-compose.yml           # Alternativa para quem usa Docker Engine real
+├── teardown.sh                  # Para e remove todos os containers e redes
 │
 ├── containers/
 │   ├── base/
@@ -159,8 +157,6 @@ projeto-iac/
 
 ## Como Executar
 
-### Opção A — Podman (recomendada, usada no desenvolvimento deste projeto)
-
 Um único comando builda as imagens, cria as redes, sobe os 5 containers, roda o Ansible e executa os testes:
 
 ```bash
@@ -172,17 +168,6 @@ bash setup.sh
 Ao final você verá as credenciais de acesso SSH no terminal. Para refazer tudo do zero, basta rodar `bash setup.sh` novamente — o script remove containers e redes anteriores antes de recriar.
 
 > **Por que não usar `podman-compose`?** A versão 1.0.6 do `podman-compose` tem um bug conhecido: ela aplica a flag `--ip` em **todas** as redes de um container simultaneamente, mesmo quando você só define IP fixo em uma rede. Isso quebra qualquer container conectado a mais de uma rede (erro `--ip can only be set for a single network`). O `setup.sh` contorna isso criando cada container com `podman run` e conectando as redes extras depois, via `podman network connect`.
-
-### Opção B — Docker Engine real
-
-Se você tem Docker instalado (não Docker Desktop sem espaço, e sim um Docker funcional):
-
-```bash
-docker compose up -d --build
-docker compose ps
-```
-
-A partir daqui, os passos do Ansible e dos testes são os mesmos (trocando `podman` por `docker` nos comandos manuais).
 
 ### Rodando o Ansible manualmente (opcional, já incluso no setup.sh)
 
@@ -199,6 +184,18 @@ cd scripts/
 chmod +x test.sh
 ./test.sh
 ```
+
+### Parando e removendo tudo
+
+Quando terminar de usar a infraestrutura (ex.: depois da apresentação, ou pra liberar recursos da máquina), use o `teardown.sh` em vez de remover containers um por um manualmente:
+
+```bash
+bash teardown.sh
+```
+
+Isso para e remove os 5 containers e as 3 redes (`admin_net`, `work_net`, `data_net`). As imagens já buildadas (`projeto-iac/base`, `coredns/coredns`) **não são removidas** — assim, rodar `bash setup.sh` de novo é rápido, sem precisar rebuildar do zero.
+
+> Se quiser só **pausar** sem remover (pra religar depois sem rebuildar nada), use `podman stop dns adminsrv worksrv datastore client` e depois `podman start` nos mesmos nomes — mais rápido que remover e recriar.
 
 ---
 
@@ -325,10 +322,6 @@ Para que o `ping` funcionasse entre redes **autorizadas** (ex.: client → admin
 
 **O isolamento real (TCP/UDP) continua funcionando** — apenas o protocolo ICMP (usado pelo `ping`) é afetado. Em um ambiente de produção, esse cenário seria resolvido com regras de firewall (`iptables`/`nftables`) explícitas, independentes da capability de rede do container.
 
-### `docker-compose.yml` não funciona com `podman-compose`
-
-Ver explicação completa na seção [Como Executar](#como-executar). Use `setup.sh` com Podman, ou `docker compose` com Docker Engine real.
-
 ---
 
 ## Troubleshooting
@@ -374,9 +367,10 @@ Esse erro ocorre se você reconstruir a imagem DNS a partir do `Dockerfile` anti
 ### Parar e limpar o ambiente (Podman)
 
 ```bash
-podman rm -f dns adminsrv worksrv datastore client
-podman network rm -f admin_net work_net data_net
+bash teardown.sh
 ```
+
+Veja mais detalhes na seção [Parando e removendo tudo](#parando-e-removendo-tudo).
 
 ### Refazer tudo do zero
 
