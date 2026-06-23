@@ -60,40 +60,6 @@ O desenvolvimento deste projeto teve como objetivo aplicar, de forma prática e 
 <img src="ilograph1.jpeg"><br>
 <img src="ilograph2.jpeg"><br>
 
-```
-                        +-------------------+
-                        |    DNS Server     |
-                        |    dns.lab        |
-                        | 10.2 | 20.2       |
-                        +---+----------+----+
-                            |          |
-              admin_net     |          |    work_net
-           192.168.10.0/24  |          | 192.168.20.0/24
-                            |          |
-     +----------+-----------+          +-----------+---------+
-     |          |                                  |         |
-+----+------+   +----------+          +------------+  +------+----+
-| adminsrv  |   |  client  |          |   worksrv  |  |  client   |
-| .10.10    |   |  .10.100 |          |   .20.10   |  |  .20.100  |
-| SSH+sudo  |   | (testes) |          |  acesso web|  | (testes)  |
-+----+------+   +----------+          +------+-----+  +------+----+
-     |                                       |
-     |         data_net 192.168.30.0/24      |
-     |                                       |
-     +----------------+----------------------+
-                      |
-               +------+-------+
-               |  datastore   |
-               |  .30.30      |
-               | Data Store X |
-               +--------------+
-
-Legenda:
-  adminsrv → datastore: LEITURA (Service A → Read)
-  worksrv  → datastore: LEITURA e ESCRITA (Service B → Read/Write)
-  client   → adminsrv: USO (Users → Service A)
-  client   → worksrv:  USO (Users → Service B)
-```
 
 ---
 
