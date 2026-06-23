@@ -57,7 +57,9 @@ O desenvolvimento deste projeto teve como objetivo aplicar, de forma prática e 
 ---
 
 ## Arquitetura da Infraestrutura
-<img src="arq.jpeg"><br>
+<img src="ilograph1.jpeg"><br>
+<img src="ilograph2.jpeg"><br>
+
 ```
                         +-------------------+
                         |    DNS Server     |
