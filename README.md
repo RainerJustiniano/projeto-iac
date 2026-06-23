@@ -7,24 +7,29 @@ Disciplina: Conteinerização e Orquestração
 
 ## Sumário
 
-1. [Visão Geral](#visão-geral)
-2. [Arquitetura da Infraestrutura](#arquitetura-da-infraestrutura)
-3. [Mapeamento do Diagrama (Ilograph)](#mapeamento-do-diagrama-ilograph)
-4. [Pré-requisitos](#pré-requisitos)
-5. [Estrutura do Projeto](#estrutura-do-projeto)
-6. [Como Executar](#como-executar)
-7. [Configuração DNS (CoreDNS)](#configuração-dns-coredns)
-8. [Automação com Ansible](#automação-com-ansible)
-9. [Permissões e Controle de Acesso](#permissões-e-controle-de-acesso)
-10. [Testes Automatizados](#testes-automatizados)
-11. [Limitações Conhecidas](#limitações-conhecidas)
-12. [Troubleshooting](#troubleshooting)
+1. [Introdução](#introdução)
+2. [Objetivos](#objetivos)
+3. [Arquitetura da Infraestrutura](#arquitetura-da-infraestrutura)
+4. [Mapeamento do Diagrama (Ilograph)](#mapeamento-do-diagrama-ilograph)
+5. [Pré-requisitos](#pré-requisitos)
+6. [Estrutura do Projeto](#estrutura-do-projeto)
+7. [Como Executar](#como-executar)
+8. [Configuração DNS (CoreDNS)](#configuração-dns-coredns)
+9. [Automação com Ansible](#automação-com-ansible)
+10. [Permissões e Controle de Acesso](#permissões-e-controle-de-acesso)
+11. [Testes Automatizados](#testes-automatizados)
+12. [Limitações Conhecidas](#limitações-conhecidas)
+13. [Troubleshooting](#troubleshooting)
 
 ---
 
-## Visão Geral
+## Introdução
 
-Este projeto implementa uma **mini infraestrutura corporativa reproduzível por código** (*Infrastructure as Code — IaC*), utilizando **Podman**, **Ansible** e **CoreDNS**. O ambiente simula uma empresa com dois segmentos de rede isolados — Administrativo e Operacional — além de um servidor de dados centralizado.
+Este projeto consiste em uma infraestrutura corporativa simulada, totalmente automatizada e reproduzível por código (*Infrastructure as Code — IaC*), desenvolvida como trabalho da disciplina de Conteinerização e Orquestração. A infraestrutura é construída utilizando **Podman**, **Ansible** e **CoreDNS**, simulando uma empresa com dois segmentos de rede isolados — Administrativo e Operacional — além de um servidor de dados centralizado, com controle de acesso baseado em grupos de usuários.
+
+Toda a configuração — criação de redes, provisionamento de containers, criação de usuários e grupos, atribuição de permissões e definição de diretórios compartilhados — é executada de forma automatizada por meio de um único script e de playbooks Ansible, sem necessidade de intervenção manual, permitindo que a infraestrutura seja recriada de forma idêntica em qualquer máquina.
+
+Esta infraestrutura também serve de base para um segundo projeto, desenvolvido na disciplina de Lógica de Programação em Python ([`python-monitor`](https://github.com/RainerJustiniano/python-monitor)), que implementa um painel gráfico de monitoramento em tempo real dos containers aqui definidos — integrando o conteúdo de ambas as disciplinas.
 
 **Tecnologias utilizadas:**
 
@@ -36,6 +41,18 @@ Este projeto implementa uma **mini infraestrutura corporativa reproduzível por 
 | Ubuntu | 22.04 | Sistema base dos containers |
 
 > **Por que Podman?** No ambiente de desenvolvimento usado (Windows + WSL com pouco espaço em disco), o Podman foi escolhido por não exigir o Docker Desktop instalado.
+
+## Objetivos
+
+O desenvolvimento deste projeto teve como objetivo aplicar, de forma prática e integrada, os principais tópicos abordados na ementa da disciplina:
+
+- Criação e orquestração de containers (Podman)
+- Criação e isolamento de redes virtuais, com segmentação de tráfego entre setores
+- Provisionamento de um serviço de resolução de nomes interno (DNS via CoreDNS)
+- Automação de infraestrutura como código (*Infrastructure as Code*) utilizando Ansible
+- Criação e gerenciamento de usuários, grupos e permissões de acesso
+- Controle de acesso a diretórios compartilhados, incluindo listas de controle de acesso (ACL)
+- Testes automatizados de validação de infraestrutura (rede, DNS, autenticação e permissões)
 
 ---
 
